@@ -1,0 +1,169 @@
+// RideProfit — Prisma schema
+// SQLite is used for a zero-setup, single-file local database suited to a
+// standalone driver tool. Swap the datasource later if multi-device sync is
+// ever needed.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// -----------------------------------------------------------------------
+// VehicleSettings — single active row holding the driver's current vehicle
+// and cost configuration. Trips always snapshot the values they used, so
+// editing this later never rewrites history (see FuelPriceUsed/ConsumptionUsed
+// on Trip).
+// -----------------------------------------------------------------------
+model VehicleSettings {
+  id        Int    @id @default(autoincrement())
+  vehicleName String @default("Seat Leon FR 2025")
+  fuelType    String @default("Diesel")
+  currency    String @default("MAD")
+
+  fuelPricePerLiter     Float @default(16)
+  avgConsumptionPer100  Float @default(6.2)
+
+  // Per-km variable cost components. Each can be toggled on/off without
+  // losing the configured value, so "basic" vs "full" cost mode is just a
+  // matter of which flags are enabled.
+  maintenancePerKm   Float @default(0.3)
+  maintenanceEnabled Boolean @default(true)
+
+  tireCostPerKm   Float @default(0.15)
+  tireEnabled     Boolean @default(true)
+
+  oilServicePerKm   Float @default(0.2)
+  oilServiceEnabled Boolean @default(true)
+
+  depreciationPerKm   Float @default(0.5)
+  depreciationEnabled Boolean @default(true)
+
+  otherCostPerKm   Float @default(0.1)
+  otherEnabled     Boolean @default(true)
+
+  tollEnabled Boolean @default(true)
+
+  // Desired profit configuration
+  desiredProfitAmount  Float  @default(200)
+  desiredProfitMargin  Float  @default(20) // percent
+  profitMode           String @default("fixed") // "fixed" | "margin"
+
+  // Defaults used to prefill the quick calculator
+  defaultReturnType String @default("NONE") // NONE | EMPTY | PAID
+  defaultTollEnabled Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+// -----------------------------------------------------------------------
+// Route — optional saved-route presets (origin/destination pairs with a
+// typical distance and toll). Purely a convenience; values are editable
+// because real-world distances/tolls drift over time.
+// -----------------------------------------------------------------------
+model Route {
+  id               Int      @id @default(autoincrement())
+  origin           String
+  destination      String
+  typicalDistanceKm Float
+  outboundToll     Float    @default(0)
+  returnToll       Float    @default(0)
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  trips Trip[]
+}
+
+// -----------------------------------------------------------------------
+// FuelPriceHistory — manual log of fuel price changes over time, for
+// reference/analytics. The "current" price actually used by calculations
+// lives on VehicleSettings; this table is a historical ledger.
+// -----------------------------------------------------------------------
+model FuelPriceHistory {
+  id            Int      @id @default(autoincrement())
+  date          DateTime @default(now())
+  fuelType      String
+  pricePerLiter Float
+  station       String?
+  city          String?
+  createdAt     DateTime @default(now())
+}
+
+// -----------------------------------------------------------------------
+// Trip — one saved/calculated ride. Stores the FULL snapshot of inputs and
+// outputs used at calculation time (fuel price, consumption, every cost
+// component, every derived metric) so historical trips are never silently
+// recalculated with today's settings.
+// -----------------------------------------------------------------------
+model Trip {
+  id        Int      @id @default(autoincrement())
+  date      DateTime @default(now())
+
+  origin      String
+  destination String
+  notes       String?
+
+  routeId Int?
+  route   Route? @relation(fields: [routeId], references: [id])
+
+  // --- Inputs ---
+  offerPrice         Float
+  pickupDistanceKm   Float @default(0)
+  passengerDistanceKm Float
+  returnDistanceKm   Float @default(0)
+  returnType         String // NONE | EMPTY | PAID
+  returnOfferPrice   Float  @default(0) // only meaningful when returnType = PAID
+
+  outboundToll Float @default(0)
+  returnToll   Float @default(0)
+
+  // Snapshot of the cost configuration used for THIS trip, so later edits to
+  // VehicleSettings never change historical numbers.
+  fuelPriceUsed      Float
+  consumptionUsed    Float
+  maintenancePerKmUsed  Float @default(0)
+  tireCostPerKmUsed     Float @default(0)
+  oilServicePerKmUsed   Float @default(0)
+  depreciationPerKmUsed Float @default(0)
+  otherCostPerKmUsed    Float @default(0)
+
+  costModeFull Boolean @default(true) // true = full operating cost, false = basic (fuel+toll only)
+
+  desiredProfitAmount Float @default(0)
+  desiredProfitMargin Float @default(0)
+  profitMode          String @default("fixed")
+
+  pickupTimeMinutes  Float?
+  waitingTimeMinutes Float?
+  tripDurationMinutes Float?
+
+  // --- Computed outputs (persisted for fast history/dashboard queries) ---
+  totalDistanceKm Float
+  fuelLiters      Float
+  fuelCost        Float
+  tollCost        Float
+  maintenanceCost Float
+  tireCost        Float
+  oilServiceCost  Float
+  depreciationCost Float
+  otherCost       Float
+  totalCost       Float
+
+  revenue      Float
+  profit       Float
+  profitPerKm  Float
+  profitPerHour Float?
+  profitMargin Float
+
+  breakEvenPrice Float
+  targetPrice    Float
+
+  status String // PROFITABLE | LOW_PROFIT | LOSS
+
+  createdAt DateTime @default(now())
+}
