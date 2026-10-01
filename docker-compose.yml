@@ -1,0 +1,18 @@
+# Used for local Docker testing, and directly deployable as a Coolify
+# "Docker Compose" resource. See DEPLOY.md for the step-by-step Coolify
+# setup (including the simpler "Dockerfile" resource type, which doesn't
+# need this file at all).
+
+services:
+  rideprofit:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "file:/app/data/dev.db"
+    volumes:
+      - rideprofit_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  rideprofit_data:

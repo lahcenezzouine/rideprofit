@@ -1,0 +1,17 @@
+node_modules
+.next
+.git
+.env
+.env*
+!.env.example
+prisma/dev.db
+prisma/dev.db-journal
+npm-debug.log*
+.dev.log
+*.tsbuildinfo
+coverage
+tests
+README.md
+DEPLOY.md
+.vscode
+.idea

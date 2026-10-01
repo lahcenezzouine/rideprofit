@@ -92,6 +92,15 @@ calculations; past trips keep the prices they were calculated with.
 | `/api/analytics/summary` | GET | Filtered trip-history totals |
 | `/api/analytics/routes` | GET | Per-route aggregated profitability |
 
+## Deploying
+
+RideProfit ships with a `Dockerfile` and `docker-compose.yml`, ready for
+Coolify (Dockerfile or Docker Compose resource type) or any other
+Docker host. **See [DEPLOY.md](./DEPLOY.md)** — the key thing to get right
+is mounting a persistent volume for the SQLite database, which the guide
+walks through step by step. Verified locally end-to-end (build → run with a
+volume → restart → data still there) before being written up.
+
 ## Safety constraint
 
 RideProfit never interacts with the inDrive app in any way — no
